@@ -1,9 +1,6 @@
 # API Documentation — Healthcare Appointment & Follow-up Manager
 
-> **Source note:** This document only lists endpoints, roles, and workflows that are explicitly referenced in the project brief (`Healthcare_Appointment_Manager.pdf`) and the project `README.md`. No endpoint has been invented. Where a request/response schema, status code, or field list is not described in those source materials, it is explicitly marked **"Not Specified in Source Material"** rather than assumed. Base URL, exact status codes, and payload field names should be confirmed against the live OpenAPI spec at `/docs` once implemented.
-
-**Base URL (development):** `http://localhost:8000/api/v1`
-*(Per README §10 — Installation Guide)*
+> **Source note:** This document only lists endpoints, roles, and workflows that are explicitly referenced in the project brief (`Healthcare_Appointment_Manager.pdf`) and the project `README.md`. No endpoint has been invented. Where a request/response schema, status code, or field list is not described in those source materials, it is explicitly marked **"Not Specified in Source Material"** rather than assumed. Base URL, exact status codes, and payload field names should be confirmed against the live OpenAPI spec at `/docs` once implemented.er README §10 — Installation Guide)*
 
 ---
 
