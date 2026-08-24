@@ -229,6 +229,9 @@ Defined in `app/prompts/clinical_prompts.py`:
 5. In the web app, click **"Connect Google Calendar"** to link your account.
 
 ---
+## System Architecture Flow:
+ <img width="1040" height="1459" alt="image" src="https://github.com/user-attachments/assets/669cf23d-5ad9-469a-a613-7ed1fd3cce5a" />
+
 
 ## Testing
 
