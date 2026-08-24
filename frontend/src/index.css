@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-forest-100;
+  }
+  body {
+    @apply bg-canvas text-ink-900;
+  }
+  h1, h2, h3 {
+    @apply font-display;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-forest-600;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-card border border-forest-100 shadow-sm;
+  }
+  .btn-primary {
+    @apply bg-forest-700 text-white rounded-card px-4 py-2 font-medium hover:bg-forest-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply bg-white border border-forest-700 text-forest-700 rounded-card px-4 py-2 font-medium hover:bg-forest-50 transition-colors disabled:opacity-50;
+  }
+  .input {
+    @apply w-full rounded-card border border-forest-100 px-3 py-2 bg-white focus:border-forest-600 focus:outline-none;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-scheduled { @apply bg-forest-100 text-forest-700; }
+  .badge-completed { @apply bg-sage-100 text-sage-500; }
+  .badge-cancelled { @apply bg-ink-900/5 text-ink-400; }
+  .badge-urgent { @apply bg-clay-500/10 text-clay-500; }
+  .badge-medium { @apply bg-amber-100 text-amber-600; }
+  .badge-low { @apply bg-sage-100 text-sage-500; }
+}
