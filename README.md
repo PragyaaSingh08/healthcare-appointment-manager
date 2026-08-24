@@ -14,12 +14,11 @@ A comprehensive clinic platform with dedicated portals for patients, doctors, an
 
 ## Live Deployment URLs
 
-- **Frontend Application (Vercel)**: [https://healthcare-appointment-manager.vercel.app](https://healthcare-appointment-manager.vercel.app)
+- **Frontend Application (Vercel)**: [https://healthcare-appointment-manager.vercel.app](https://healthcare-appointment-manager-xi.vercel.app)
 - **Backend API (Railway)**: [https://healthcare-appointment-manager-production-831c.up.railway.app](https://healthcare-appointment-manager-production-831c.up.railway.app)
 - **Interactive API Docs (Swagger UI)**: [https://healthcare-appointment-manager-production-831c.up.railway.app/docs](https://healthcare-appointment-manager-production-831c.up.railway.app/docs)
 - **ReDoc Specification**: [https://healthcare-appointment-manager-production-831c.up.railway.app/redoc](https://healthcare-appointment-manager-production-831c.up.railway.app/redoc)
 
----
 
 ## Status of this Build
 
