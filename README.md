@@ -1,151 +1,246 @@
 # Healthcare Appointment & Follow-up Manager
 
-A clinic platform with separate patient, doctor, and admin portals: booking with concurrency-safe slot holds, AI pre-/post-visit summaries (Groq), patient-history RAG (ChromaDB), an AI assistant chatbot, email notifications, and Google Calendar sync for both patient and doctor.
+A comprehensive clinic platform with dedicated portals for patients, doctors, and administrators. Features concurrency-safe slot holds, multi-layer double-booking prevention, Groq AI pre-visit and post-visit summaries, ChromaDB patient-history RAG, an AI assistant chatbot, multi-channel notifications, and Google Calendar two-way synchronization.
 
-# 🌐 Live Deployment
+### Documentation Index
 
-| Service | URL |
-|----------|------|
-| Frontend (Vercel) | https://healthcare-appointment-ma-git-3fcb5f-pragyas1008-1004s-projects.vercel.app |
-| Backend API (Railway) | https://healthcare-appointment-manager-production-831c.up.railway.app |
-| Swagger API Docs | https://healthcare-appointment-manager-production-831c.up.railway.app/docs |
-| ReDoc API Docs | https://healthcare-appointment-manager-production-831c.up.railway.app/redoc |
+- [`SYSTEM_DESIGN.md`](./SYSTEM_DESIGN.md): Architecture overview, multi-layered concurrency control, slot holds, leave conflicts, and failure handling.
+- [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md): Complete database schema specifications, table constraints, indexes, and ER diagram.
+- [`LLM_PROMPTS.md`](./LLM_PROMPTS.md): AI prompt templates, schema definitions, validation rules, and fallback mechanisms.
+- [`GOOGLE_CALENDAR_SETUP.md`](./GOOGLE_CALENDAR_SETUP.md): Step-by-step Google Cloud OAuth configuration and calendar sync lifecycles.
+- [`DEPLOYMENT_GUIDE.md`](./DEPLOYMENT_GUIDE.md): Production deployment handbook for Railway (backend/database/worker) and Vercel (frontend).
 
-### Quick Access
+---
 
-- 🚀 Frontend Demo: https://healthcare-appointment-ma-git-3fcb5f-pragyas1008-1004s-projects.vercel.app
-- 🔧 Backend API: https://healthcare-appointment-manager-production-831c.up.railway.app
-- 📚 Swagger Docs: https://healthcare-appointment-manager-production-831c.up.railway.app/docs
-- 📖 ReDoc Docs: https://healthcare-appointment-manager-production-831c.up.railway.app/redoc
+## Live Deployment URLs
 
-See SYSTEM_DESIGN.md for the architecture write-up (double-booking prevention, leave conflicts, notification/calendar failure handling, latency).
+- **Frontend Application (Vercel)**: [https://healthcare-appointment-manager.vercel.app](https://healthcare-appointment-manager.vercel.app)
+- **Backend API (Railway)**: [https://healthcare-appointment-manager-production-831c.up.railway.app](https://healthcare-appointment-manager-production-831c.up.railway.app)
+- **Interactive API Docs (Swagger UI)**: [https://healthcare-appointment-manager-production-831c.up.railway.app/docs](https://healthcare-appointment-manager-production-831c.up.railway.app/docs)
+- **ReDoc Specification**: [https://healthcare-appointment-manager-production-831c.up.railway.app/redoc](https://healthcare-appointment-manager-production-831c.up.railway.app/redoc)
 
-Status of this build
-This codebase was built and verified in a sandboxed dev environment:
+---
 
-34/34 backend tests pass, including a real concurrency test (12 simultaneous threads booking the same doctor+slot against a live Postgres instance → exactly 1 success, 11 conflicts, 1 DB row), regression tests for three bugs found via screenshot review (see git history / commit notes), and full coverage of password reset + email verification (enumeration-proof forgot-password, single-use expiring tokens, real password change verified via login with old/new credentials).
-A full HTTP smoke test (register → create doctor → check availability → hold → confirm → attempted double-book → graceful AI failure) was run end-to-end against a running instance of the API, as was the complete forgot-password and email-verification flow.
-All three email types from the spec are implemented: booking confirmation, upcoming-appointment reminder (scheduled 24h before start, re-timed on reschedule, cancelled if the appointment is cancelled), and cancellation — each independently retried per recipient. Password-reset and email-verification emails are separate, transactional sends through the same pluggable EmailService.
-The patient-facing reschedule flow, the doctor's RAG-backed "relevant patient history" view, and forgot-password/verify-email pages are all wired end-to-end in the UI, not just the API.
-Frontend type-checks cleanly (tsc -b) and builds for production (vite build).
-Not yet done by me: deploying to a public host, and obtaining real Groq/Google/SendGrid credentials — those require accounts only you can create. Everything is wired to work the moment real keys are in .env.
-Tech stack
-Frontend: React + Vite + TypeScript + React Router + Axios + Tailwind CSS
-Backend: FastAPI + SQLAlchemy + Alembic + PostgreSQL + JWT auth
-Background jobs: Redis + Celery (worker + beat)
-AI: Groq (openai/gpt-oss-20b by default, configurable)
-RAG: ChromaDB
-Email: pluggable (console/SendGrid/Mailgun)
-Calendar: Google Calendar API, OAuth 2.0
-Project structure
+## Status of this Build
+
+- **Backend Tests**: 34/34 unit and concurrency tests pass, including live PostgreSQL multi-threaded race conditions (12 concurrent threads targeting the same slot -> exactly 1 booking success, 11 conflicts, 1 database row).
+- **Authentication & RBAC**: Stateless JWT auth with role isolation for `PATIENT`, `DOCTOR`, and `ADMIN`. Includes secure password reset and email verification flows.
+- **Slot Hold Mechanism**: 300s TTL advisory hold with visual countdown timer in the frontend, inline expiration validation, and automated Celery Beat cleanup sweep every 60s.
+- **Double-Booking Guarantee**: PostgreSQL partial unique index `uq_active_doctor_slot` on `(doctor_id, start_time) WHERE status IN ('SCHEDULED', 'RESCHEDULED')` coupled with `SELECT ... FOR UPDATE` row-level locking.
+- **AI Clinical Decision Support**: Groq-powered pre-visit intake summaries (urgency level, chief complaint, suggested questions) and post-visit patient summaries (summary, medication schedule, follow-up steps) validated with strict Pydantic schemas.
+- **Google Calendar Integration**: Complete OAuth 2.0 connect flow, callback handling, and background Celery workers syncing create, update (reschedule), and delete (cancellation) events for both patients and doctors.
+- **Admin Doctor & Leave Management**: Complete administrative controls for doctor profile creation, editing, active/deactivated status toggling, and leave scheduling with conflict detection.
+- **Frontend App**: Responsive React + Vite + TypeScript application styled with Tailwind CSS.
+
+---
+
+## Tech Stack
+
+- **Frontend**: React 18, Vite, TypeScript, React Router 6, Axios, Tailwind CSS
+- **Backend**: FastAPI (Python 3.12+), SQLAlchemy 2.0, Alembic, PostgreSQL, JWT (python-jose / passlib)
+- **Asynchronous Processing**: Redis, Celery (Worker + Beat scheduler)
+- **AI & RAG**: Groq API (`openai/gpt-oss-20b`), ChromaDB vector store
+- **Email Delivery**: Pluggable provider system (Console / SendGrid / Mailgun)
+- **Calendar Synchronization**: Google Calendar API v3 with OAuth 2.0
+
+---
+
+## Project Structure
+
+```
 healthcare-appointment-manager/
-├── frontend/           React app (patient/doctor/admin portals, chatbot)
+├── frontend/                     # React + Vite application
+│   ├── src/
+│   │   ├── components/           # Reusable UI (StatusBadge, Toast, CalendarConnectButton)
+│   │   ├── context/              # AuthContext (JWT state & RBAC)
+│   │   ├── layouts/              # AppLayout (navigation, role-based menus)
+│   │   ├── pages/
+│   │   │   ├── admin/            # AdminOverview, AdminDoctors (CRUD + leaves)
+│   │   │   ├── doctor/           # DoctorAppointmentList, ConsultationView
+│   │   │   ├── patient/          # Dashboard, DoctorSearch, DoctorProfile, AppointmentDetail, ChatAssistant
+│   │   │   ├── CalendarCallback  # OAuth return handler
+│   │   │   └── Login, Register, ForgotPassword, ResetPassword, VerifyEmail
+│   │   ├── services/api.ts       # Axios client & API endpoints
+│   │   └── types/                # TypeScript interface models
+│   ├── .env.example
+│   └── vite.config.ts
 ├── backend/
 │   ├── app/
-│   │   ├── main.py         FastAPI entrypoint
-│   │   ├── core/            config, db, security, auth deps
-│   │   ├── models/           SQLAlchemy models
-│   │   ├── schemas/          Pydantic request/response + AI schemas
-│   │   ├── api/               route handlers
-│   │   ├── services/         business logic (booking, slots, AI, RAG, email, calendar, chatbot)
-│   │   ├── workers/           Celery tasks (email, calendar, reminders, RAG indexing, hold cleanup)
-│   │   ├── prompts/           Groq prompt templates
-│   │   └── utils/             interval math, time utils
-│   ├── alembic/               migrations
-│   ├── tests/                 pytest suite incl. concurrency test
-│   ├── scripts/seed.py        synthetic demo data
+│   │   ├── api/                  # Route handlers (auth, doctors, appointments, consultation, leave, calendar, chat)
+│   │   ├── core/                 # Config, database engine, dependency injection
+│   │   ├── models/               # SQLAlchemy ORM models & table constraints
+│   │   ├── schemas/              # Pydantic validation & response models
+│   │   ├── services/             # Business logic (booking, holds, AI, RAG, calendar, email, reminders)
+│   │   ├── workers/              # Celery background tasks (email, calendar, reminders, hold cleanup, RAG)
+│   │   ├── prompts/              # LLM prompt templates
+│   │   └── utils/                # Time & interval algorithms
+│   ├── alembic/                  # Database migrations
+│   ├── tests/                    # Pytest test suite (concurrency, auth, slots, AI)
+│   ├── scripts/seed.py           # Synthetic seed data generator
 │   └── .env.example
 ├── docker-compose.yml
 ├── README.md
 └── SYSTEM_DESIGN.md
-Quickstart (Docker)
-cp backend/.env.example backend/.env
-# fill in GROQ_API_KEY, GOOGLE_CLIENT_ID/SECRET, EMAIL_API_KEY as you get them
-docker compose up --build
-Frontend: http://localhost
-Backend: http://localhost:8000 (docs at /docs)
-The backend container runs alembic upgrade head automatically on startup.
-Seed demo data (after containers are up):
+```
 
+---
+
+## Google Calendar Integration Flow
+
+1. **Initiating Connection**:
+   - Patients and doctors can connect their Google Calendar directly from the sidebar or their respective dashboard widgets.
+   - Clicking **"Connect Google Calendar"** sends a request to `POST /api/calendar/connect`, which builds a secure Google OAuth 2.0 authorization URL containing `client_id`, `redirect_uri`, offline access scope (`https://www.googleapis.com/auth/calendar.events`), and user state.
+2. **Consent & Callback**:
+   - The user authorizes access on Google's consent screen.
+   - Google redirects the browser to the frontend `/calendar/callback?code=...&state=...` route.
+   - [CalendarCallback.tsx](file:///d:/healthcare-appointment-manager%20%282%29/healthcare-appointment-manager/frontend/src/pages/CalendarCallback.tsx) exchanges the code for access/refresh tokens via `GET /api/calendar/callback`, securely stores them in the database (`google_oauth_tokens`), and returns the user to their dashboard with a confirmation state.
+3. **Automated Event Sync**:
+   - **On Booking**: `CalendarWorker` creates a calendar event on the primary calendar for both the patient and doctor independently.
+   - **On Reschedule**: `CalendarWorker` issues an event patch updating the start and end time.
+   - **On Cancellation**: `CalendarWorker` removes the calendar event.
+   - **Fault Tolerance**: Calendar synchronization is processed asynchronously off the booking critical path. Temporary Google API rate limits or network issues retry with exponential backoff without affecting the database booking.
+
+---
+
+## Admin Doctor & Leave Management
+
+Administrators have full operational control via the **Doctor Management** portal (`/admin/doctors`):
+
+1. **Doctor Profiles**:
+   - **Add Doctor**: Create doctor credentials, specialization, qualifications, years of experience, appointment slot duration (10–120 mins), and weekly working days.
+   - **Edit Doctor**: Update clinical credentials, slot durations, or specialization at any time via the Edit modal.
+   - **Deactivate / Reactivate**: Deactivating a doctor immediately hides them from patient searches and prevents new appointment bookings while preserving all existing appointment history.
+2. **Doctor Leave & Conflict Management**:
+   - **Schedule Leave**: Select a date and optional reason.
+   - **Automated Conflict Transition**: Any existing active bookings for that doctor on the selected date are automatically transitioned to `RESCHEDULE_REQUIRED` status.
+   - **Patient Notification**: Affected patients receive an automated conflict notification email with a direct link to reschedule into a new slot.
+   - **Slot Recalculation**: The slot generation engine immediately marks that date unavailable.
+   - **Delete Leave**: Administrators can cancel/delete a scheduled leave record when plans change.
+
+---
+
+## Quickstart (Docker)
+
+```bash
+cp backend/.env.example backend/.env
+# Fill in GROQ_API_KEY, GOOGLE_CLIENT_ID/SECRET, EMAIL_API_KEY as needed
+docker compose up --build
+```
+
+- Frontend: [http://localhost:5173](http://localhost:5173) (or http://localhost in production)
+- Backend: [http://localhost:8000](http://localhost:8000) (Interactive Swagger docs at `/docs`)
+
+Seed demo data:
+```bash
 docker compose exec backend python -m scripts.seed
-Quickstart (local, no Docker)
+```
+
+---
+
+## Quickstart (Local Development)
+
 Requires Python 3.12+, Node 20+, PostgreSQL, Redis.
 
-# Backend
+```bash
+# Backend Setup
 cd backend
-python -m venv venv && source venv/bin/activate
+python -m venv venv && source venv/bin/activate  # or venv\Scripts\activate on Windows
 pip install -r requirements.txt
-cp .env.example .env   # edit DATABASE_URL etc.
+cp .env.example .env   # Configure DATABASE_URL, JWT_SECRET, etc.
 alembic upgrade head
-python -m scripts.seed          # optional demo data
+python -m scripts.seed          # Optional synthetic demo data
 uvicorn app.main:app --reload
 
-# In separate terminals:
+# Start Celery Workers (in separate terminals)
 celery -A app.workers.celery_app worker --loglevel=info
 celery -A app.workers.celery_app beat --loglevel=info
 
-# Frontend
+# Frontend Setup
 cd frontend
 npm install
-npm run dev   # http://localhost:5173, proxies /api to :8000
-Environment variables
-See backend/.env.example for the full list with comments. Required for full functionality: DATABASE_URL, JWT_SECRET, GROQ_API_KEY, GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET, EMAIL_PROVIDER/EMAIL_API_KEY. The app runs and degrades gracefully without the AI/email/calendar keys (AI summaries show status: FAILED, email defaults to console logging, calendar sync is skipped per-user until they connect).
+cp .env.example .env   # Configure VITE_API_URL if connecting to remote backend
+npm run dev            # http://localhost:5173
+```
 
-Database
-Schema is defined in app/models/, migrations in alembic/versions/. Key design point: appointments has a partial unique index on (doctor_id, start_time) for active statuses — the actual double-booking guarantee (see SYSTEM_DESIGN.md). Run alembic revision --autogenerate -m "..." after model changes, review the generated migration, then alembic upgrade head.
+---
 
-Database schema (summary)
-Full definitions in app/models/; migrations in alembic/versions/.
+## Database Schema Overview
 
-Table	Purpose	Key constraint
-users	login identity + role (PATIENT/DOCTOR/ADMIN) + email verification flag	unique email
-password_reset_tokens, email_verification_tokens	single-use, expiring, SHA-256-hashed tokens for forgot-password / verify-email	unique token_hash
-patients, doctors	role-specific profile, 1:1 with users	
-doctor_working_hours	per-weekday availability window	unique (doctor_id, day_of_week)
-doctor_leaves	dates a doctor is unavailable	unique (doctor_id, leave_date)
-appointments	the booking itself	unique (doctor_id, start_time) where status is active — the double-booking guarantee
-slot_holds	temporary reservation while a patient fills the symptom form	indexed (doctor_id, start_time), (expires_at, status)
-symptoms	patient-submitted symptom text	1:1 with appointments
-pre_visit_ai_summaries, post_visit_ai_summaries	Groq output + status (PENDING/SUCCESS/FAILED)	
-clinical_notes, prescriptions	doctor-entered consultation data	
-medication_reminders	scheduled reminder sends derived from prescription frequency	indexed (status, scheduled_at)
-notifications	per-recipient email queue (booking/reminder/cancellation/reschedule/leave-conflict)	indexed (status, scheduled_at)
-calendar_events	per-user (patient or doctor) Google Calendar sync state	indexed (appointment_id, user_id)
-chat_sessions, chat_messages	chatbot conversation history	
-patient_history_documents	durable mirror of what's indexed into ChromaDB	indexed patient_id
-password_reset_tokens, email_verification_tokens	single-use, expiring, hashed tokens for forgot-password and email verification	unique token_hash
-API endpoints (summary)
-Full interactive docs at /docs. Error responses: {"error": {"code": "...", "message": "..."}}.
+| Table | Purpose | Key Constraints |
+|---|---|---|
+| `users` | User identity & RBAC (`PATIENT`, `DOCTOR`, `ADMIN`) | Unique `email` |
+| `patients`, `doctors` | Role profiles | 1:1 with `users` (`user_id`) |
+| `doctor_working_hours` | Weekly schedule windows | Unique `(doctor_id, day_of_week)` |
+| `doctor_leaves` | Doctor unavailable dates | Unique `(doctor_id, leave_date)` |
+| `appointments` | Authoritative appointment bookings | **Partial Unique Index `(doctor_id, start_time)` where `status IN ('SCHEDULED', 'RESCHEDULED')`** |
+| `slot_holds` | Temporary reservations during symptom intake | Indexed `(doctor_id, start_time)`, `(expires_at, status)` |
+| `symptoms` | Patient-submitted pre-booking intake text | 1:1 with `appointments` |
+| `pre_visit_ai_summaries` | LLM triage urgency, complaint, questions | 1:1 with `appointments` |
+| `clinical_notes` | Doctor consultation notes | 1:1 with `appointments` |
+| `prescriptions` | Structured medication items | Indexed `appointment_id` |
+| `medication_reminders` | Scheduled patient medication alerts | Indexed `(status, scheduled_at)` |
+| `post_visit_ai_summaries` | LLM patient-friendly summary & schedule | 1:1 with `appointments` |
+| `notifications` | Independent email delivery queue | Indexed `(status, scheduled_at)` |
+| `google_oauth_tokens` | Per-user OAuth credentials | Unique `user_id` |
+| `calendar_events` | Calendar synchronization tracking | Indexed `(appointment_id, user_id)` |
+| `patient_history_documents` | Durable mirror of ChromaDB RAG documents | Indexed `patient_id` |
 
-Area	Endpoints
-Auth	POST /api/auth/register, /login, /logout, GET /me, POST /forgot-password, POST /reset-password, POST /verify-email, POST /resend-verification
-Doctors	GET /api/doctors, GET /{id}, GET /{id}/availability, POST /api/doctors (admin), PUT /{id} (admin), DELETE /{id} (admin)
-Leave	POST /api/doctors/{id}/leave, DELETE /{id}/leave/{leave_id} (admin)
-Slots	POST /api/slots/hold, DELETE /api/slots/{hold_id}
-Appointments	POST /api/appointments/confirm/{hold_id}, GET /api/appointments, GET /{id}, PUT /{id}/reschedule, POST /{id}/cancel, GET /{id}/previsit-summary
-Consultation	POST /api/appointments/{id}/clinical-notes, POST /{id}/prescription, GET /{id}/postvisit-summary, GET /{id}/relevant-history (doctor, RAG)
-Chat	POST /api/chat/sessions, GET /api/chat/sessions, POST /api/chat/sessions/{id}/messages
-History	GET /api/patients/me/history, GET /api/patients/me/history/relevant
-Calendar	POST /api/calendar/connect, GET /api/calendar/callback
-Google Calendar setup
-In Google Cloud Console, create a project and enable the Google Calendar API.
-Create OAuth 2.0 credentials (Web application type).
-Add http://localhost:8000/api/calendar/callback (or your deployed URL) as an authorized redirect URI.
-Put the client ID/secret in .env.
-Users connect via POST /api/calendar/connect, which returns a consent URL; Google redirects back to /api/calendar/callback.
-LLM prompts
-See app/prompts/clinical_prompts.py. Pre-visit prompt requests urgency (Low/Medium/High), chief complaint, and three suggested questions as strict JSON. Post-visit prompt converts clinical notes + prescription into a patient-friendly summary, medication schedule, and follow-up steps — validated with Pydantic (app/schemas/ai.py); any failure or schema mismatch marks the row FAILED without fabricating data.
+---
 
-Testing
+## API Endpoints Summary
+
+| Module | Endpoints |
+|---|---|
+| **Auth** | `POST /api/auth/register`, `POST /login`, `POST /logout`, `GET /me`, `POST /forgot-password`, `POST /reset-password`, `POST /verify-email`, `POST /resend-verification` |
+| **Doctors** | `GET /api/doctors`, `GET /api/doctors/{id}`, `GET /api/doctors/{id}/availability`, `POST /api/doctors`, `PUT /api/doctors/{id}`, `DELETE /api/doctors/{id}` |
+| **Leave** | `GET /api/doctors/{id}/leave`, `POST /api/doctors/{id}/leave`, `DELETE /api/doctors/{id}/leave/{leave_id}` |
+| **Slots** | `POST /api/slots/hold`, `DELETE /api/slots/{hold_id}` |
+| **Appointments** | `POST /api/appointments/confirm/{hold_id}`, `GET /api/appointments`, `GET /api/appointments/{id}`, `PUT /api/appointments/{id}/reschedule`, `POST /api/appointments/{id}/cancel`, `GET /api/appointments/{id}/previsit-summary` |
+| **Consultation** | `GET /api/appointments/{id}/clinical-notes`, `POST /api/appointments/{id}/clinical-notes`, `GET /api/appointments/{id}/prescriptions`, `POST /api/appointments/{id}/prescription`, `GET /api/appointments/{id}/relevant-history`, `GET /api/appointments/{id}/postvisit-summary` |
+| **Calendar** | `GET /api/calendar/status`, `POST /api/calendar/connect`, `GET /api/calendar/callback` |
+| **Chat & RAG** | `POST /api/chat/sessions`, `GET /api/chat/sessions`, `POST /api/chat/sessions/{id}/messages`, `GET /api/patients/me/history/relevant` |
+
+---
+
+## LLM Prompts & Schemas
+
+Defined in `app/prompts/clinical_prompts.py`:
+
+- **Pre-Visit Triage Summary**:
+  ```
+  Analyse these symptoms and return: urgency level (Low / Medium / High), chief complaint, and three suggested questions for the doctor.
+  ```
+  *Validated with Pydantic (`PreVisitAIResult`). If the LLM call times out or fails schema validation, the appointment remains valid and `pre_visit_ai_summaries.status` is set to `FAILED` without fabricating hallucinated data.*
+
+- **Post-Visit Patient Summary**:
+  ```
+  Convert these clinical notes into a patient-friendly summary with medication schedule and follow-up steps.
+  ```
+  *Validated with Pydantic (`PostVisitAIResult`), extracting patient-friendly instructions, structured medication timings, and follow-up precautions.*
+
+---
+
+## Google Calendar Setup Steps
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the **Google Calendar API**.
+2. Create OAuth 2.0 credentials (Web application).
+3. Add `http://localhost:5173/calendar/callback` (or your deployed URL `https://<your-domain>/calendar/callback`) and `http://localhost:8000/api/calendar/callback` to the authorized redirect URIs.
+4. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`.
+5. In the web app, click **"Connect Google Calendar"** to link your account.
+
+---
+
+## Testing
+
+```bash
 cd backend
 pytest tests/ -v
-Covers: auth/RBAC, slot generation (working hours, booked/held exclusion, leave), slot hold expiry and ownership, leave-conflict marking + notification, AI graceful degradation, and the concurrency acceptance test. Requires a running Postgres pointed to by DATABASE_URL (the partial unique index behavior is Postgres-specific; SQLite is not used for tests).
+```
 
-API documentation
-Interactive docs are auto-generated by FastAPI at /docs (Swagger) and /redoc once the backend is running. Error responses use {"error": {"code": ..., "message": ...}} with standard HTTP status codes (400/401/403/404/409/429/500/503).
-
-Troubleshooting
-connection to server ... failed: Postgres isn't running or DATABASE_URL is wrong.
-AI summaries always FAILED: check GROQ_API_KEY is set and valid; check backend logs for the underlying Groq error.
-Calendar events never sync: the user hasn't completed /api/calendar/connect yet, or GOOGLE_CLIENT_ID/SECRET are unset — this fails silently by design (calendar is never on the booking critical path).
-Emails not arriving: default EMAIL_PROVIDER=console only logs to stdout; set sendgrid and EMAIL_API_KEY for real delivery.
+Test coverage includes:
+- Concurrency acceptance test (12 simultaneous threads booking the identical doctor and time slot against live PostgreSQL).
+- Role-based authorization & route protection.
+- Slot generation respecting working hours, buffer duration, holds, and doctor leave dates.
+- Slot hold expiration, manual release, and inline boundary checks.
+- AI service graceful degradation on invalid JSON, schema mismatches, and timeouts.
+- Password reset and email verification token lifecycles.
