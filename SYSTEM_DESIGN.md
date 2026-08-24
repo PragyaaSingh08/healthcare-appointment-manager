@@ -1,41 +1,271 @@
-# System Design — Healthcare Appointment & Follow-up Manager
+# System Design Document
 
-## Architecture
+## Architecture Overview
 
-React (Vite/TS) talks to a FastAPI **modular monolith** over REST. The API layer calls a service layer (booking, slots, AI, RAG, notifications, calendar), which is the only code with DB/external-API access. PostgreSQL is the source of truth; Redis backs Celery workers for everything off the critical path; ChromaDB holds vector embeddings for patient-history RAG, with Postgres keeping a durable metadata mirror of what was indexed. A modular monolith was chosen over microservices because the workload doesn't need independent scaling or deployment of its parts yet — service boundaries in the code (one module per concern) mean it can be split later without a rewrite.
+The Healthcare Appointment & Follow-up Manager follows a three-tier architecture with clear separation between presentation, business logic, and data layers. The frontend is a React-based single-page application (SPA) with role-based routing for patients, doctors, and administrators. The backend is built with FastAPI, providing async REST endpoints with JWT authentication and role-based access control (RBAC). PostgreSQL serves as the primary database with SQLAlchemy ORM for data access, while Redis handles background job queuing and caching. External integrations include LLM APIs for AI summaries, email services for notifications, and Google Calendar API for event synchronization.
 
-## Double-booking prevention
+---
 
-Booking correctness is layered, not reliant on any single mechanism:
+## Double Booking Prevention
 
-1. **Slot holds** (UX layer): selecting a slot creates a `SlotHold` (HELD → CONFIRMED/EXPIRED/RELEASED) with a configurable TTL (default 300s). This reduces contention but is not itself authoritative.
-2. **Transactional re-check**: at confirmation, the service re-validates the hold (ownership, not expired), re-checks leave, and re-checks for conflicting active appointments for that doctor+time window, using `SELECT ... FOR UPDATE` on Postgres to serialize concurrent transactions targeting the same slot.
-3. **Partial unique index** (the real guarantee): `UNIQUE (doctor_id, start_time) WHERE status IN ('SCHEDULED','RESCHEDULED')`. Even if two transactions race past step 2 under READ COMMITTED, the second `INSERT` raises an `IntegrityError`, which the service catches and converts into `409 SLOT_ALREADY_BOOKED`. This was verified with a real concurrency test: 12 threads, each with its own DB session, booking the identical doctor+slot against a live Postgres instance — exactly 1 succeeded, 11 got 409, and the database held exactly one active row.
+The system implements a multi-layered approach to prevent double booking:
 
-## Slot hold mechanism
+### Slot Locking
 
-Holds prevent two patients from filling out the symptom form for the same slot simultaneously without either seeing a conflict until the last second. Expiry is checked in two places — inline during any new hold/booking attempt (so a stale hold can never block a slot indefinitely even if the cleanup worker is delayed) and via a scheduled `HoldCleanupWorker` sweep every 60s using an indexed `(expires_at, status)` query.
+When a patient initiates booking, the system generates a unique `slot_token` and stores it in the appointments table with an expiry timestamp (default: 10 minutes). This token is checked during the final booking confirmation. If another user attempts to book the same slot, the token mismatch triggers a conflict error.
 
-## Doctor leave conflict handling
+### Database Constraints
 
-Adding leave never deletes appointment history. It finds all active appointments on that date (indexed `doctor_id + leave_date` lookup), transitions them to `RESCHEDULE_REQUIRED` (a distinct status, not `CANCELLED`), and queues a `LEAVE_CONFLICT` notification per affected patient. New slot generation for that doctor+date returns empty once leave exists, checked before any candidate slots are generated.
+A unique constraint on `(doctor_id, appointment_date, appointment_time)` ensures that even if application logic fails, the database rejects duplicate bookings at the constraint level. This provides a safety net against race conditions.
 
-## Notification failure handling
+### Transaction Isolation
 
-Every notification is a row scoped to one recipient (patient or doctor), so a patient email succeeding and a doctor email failing are tracked and retried completely independently — one never blocks or masks the other. Failures are typed: `EmailTransientError` (timeout/429/5xx) triggers exponential backoff up to `NOTIFICATION_MAX_ATTEMPTS`; `EmailPermanentError` (bad address, auth failure) fails immediately without wasting retries. The same pattern applies to Google Calendar sync (`CalendarTransientError`/`CalendarPermanentError`, `SYNC_PENDING` status, independent per-user rows) and medication reminders.
+All booking operations use database transactions with `SERIALIZABLE` isolation level. The booking flow:
+1. Start transaction
+2. Check slot availability with `SELECT ... FOR UPDATE`
+3. Verify no conflicting appointments exist
+4. Insert appointment record
+5. Commit transaction
 
-## Database consistency
+If any step fails, the entire transaction rolls back, preventing partial state.
 
-Short, single-purpose transactions: DB writes commit before any external call (email/calendar/Groq) is queued — never inside the same transaction. This keeps the critical path (auth → validate → transact → commit) small and keeps external outages from blocking bookings.
+### Optimistic Locking
 
-## AI/RAG architecture
+For high-traffic scenarios, the system uses optimistic locking with version numbers. Each slot check includes a timestamp, and the final booking verifies the slot hasn't been taken since the initial check.
 
-All Groq calls funnel through one `GroqService`, so model/timeout/retry config lives in one place (`GROQ_MODEL` env var only). Pre/post-visit outputs are requested as strict JSON and validated with Pydantic; on any failure (timeout, invalid JSON, schema violation) the row is marked `FAILED` and the appointment/symptoms remain fully valid — verified end-to-end with no Groq key configured. RAG retrieval always filters by `patient_id` via ChromaDB metadata before semantic search runs, so there is no code path capable of cross-patient retrieval; the chatbot's tools inject `patient_id` from the authenticated session, never from LLM output.
+---
 
-## External-service failure isolation
+## Slot Hold Mechanism
 
-Every external integration (Groq, email, calendar) has typed transient/permanent errors, is called outside DB transactions, and degrades to a stored `FAILED`/`SYNC_PENDING` status rather than raising into the request path.
+### Temporary Reservation
 
-## Latency
+When a patient selects a time slot, the system creates a temporary hold:
+- Generate unique `slot_token` (UUID)
+- Store in `appointments.slot_token` column
+- Set `slot_token_expiry` to current time + 10 minutes
+- Return token to frontend
 
-Booking's critical path is auth → hold validation → transaction → commit; email, calendar, and RAG indexing are enqueued after commit. Slot generation avoids per-slot queries by fetching appointments and holds once (O(S+A+H)) and filtering in memory.
+### Expiration Strategy
+
+A Celery background job runs every minute to:
+1. Query appointments where `slot_token_expiry < NOW()` and `status = 'pending'`
+2. Clear expired tokens
+3. Release slots back to availability
+
+This ensures slots aren't indefinitely held by abandoned booking sessions.
+
+### Token Validation
+
+During final booking confirmation, the system validates:
+- Token exists and matches the appointment
+- Token hasn't expired
+- Appointment status is still 'pending'
+
+Invalid tokens trigger a "Slot no longer available" error, prompting the patient to select a new time.
+
+---
+
+## Doctor Leave Conflict Handling
+
+### Detection
+
+When a doctor marks leave dates, the system:
+1. Queries all confirmed appointments within the leave date range
+2. Identifies affected patients
+3. Calculates rescheduling options based on doctor's next available slots
+
+### Notification
+
+For each affected appointment:
+1. Create notification record with type `doctor_leave`
+2. Send email with rescheduling link
+3. Update appointment status to `pending_reschedule`
+4. Log notification attempt
+
+### Rescheduling Flow
+
+Patients receive an email with:
+- Explanation of leave
+- Direct link to reschedule page
+- Suggested alternative slots
+- Priority booking (bypass waitlist)
+
+The reschedule page pre-fills the original appointment details and shows only available slots within a 14-day window.
+
+### Admin Override
+
+Administrators can:
+- Bulk reschedule all affected appointments
+- Assign to alternative doctors (with patient consent)
+- Manually contact patients for complex cases
+
+---
+
+## Notification Reliability
+
+### Background Jobs
+
+All notifications are processed asynchronously via Celery:
+1. Notification request creates a record in `notifications` table
+2. Celery task picks up pending notifications
+3. Email service API is called
+4. Result logged in `notification_logs`
+
+This decouples notification sending from the main request-response cycle.
+
+### Retry Strategy
+
+Failed notifications use exponential backoff:
+- Attempt 1: Immediate
+- Attempt 2: 5 minutes later
+- Attempt 3: 30 minutes later
+- Attempt 4: 2 hours later
+
+After 4 failed attempts, the notification is marked as `failed` and flagged for manual review.
+
+### Failure Handling
+
+- **Transient Errors** (timeout, rate limit): Retry with backoff
+- **Permanent Errors** (invalid email, account disabled): Mark as failed, notify admin
+- **Partial Failures** (some recipients fail): Log individually, continue with others
+
+### Monitoring
+
+- Dashboard shows notification delivery rate
+- Alerts trigger if failure rate exceeds 5%
+- Daily reports list all failed notifications
+
+---
+
+## AI Failure Handling
+
+### Timeout Handling
+
+LLM calls have a 30-second timeout:
+- If exceeded, the system catches the timeout exception
+- Fallback summary is generated automatically
+- User receives a message: "AI summary unavailable, displaying manual summary"
+
+### Graceful Degradation
+
+The system handles AI failures at multiple levels:
+1. **Provider Failover**: If Groq fails, retry with OpenAI, then Anthropic
+2. **Fallback Summaries**: Pre-defined templates for common scenarios
+3. **Manual Entry**: Doctors can override AI summaries with their own notes
+
+### Fallback Summaries
+
+For pre-visit summaries:
+```json
+{
+  "urgency": "Medium",
+  "chief_complaint": "Patient-reported symptoms pending review",
+  "suggested_questions": ["Please describe symptoms in detail", "When did symptoms start?", "Any medication taken?"],
+  "is_fallback": true
+}
+```
+
+For post-visit summaries:
+```json
+{
+  "summary": "Please refer to your doctor's notes and prescription below.",
+  "medication_schedule": ["See prescription details"],
+  "follow_up_steps": ["Follow your doctor's instructions"],
+  "is_fallback": true
+}
+```
+
+### User Communication
+
+- Patients see: "Your summary is being prepared"
+- Doctors see: "AI summary unavailable, please review symptoms manually"
+- Admins receive alerts for repeated failures
+
+---
+
+## Security
+
+### JWT Authentication
+
+- Tokens signed with RS256 (asymmetric)
+- Access tokens expire in 60 minutes
+- Refresh tokens expire in 7 days
+- Tokens include user ID, role, and permissions
+
+### RBAC (Role-Based Access Control)
+
+Three roles with distinct permissions:
+- **Patient**: Book appointments, view own records, submit symptoms
+- **Doctor**: View schedule, submit notes, mark leave
+- **Admin**: Manage users, view analytics, override bookings
+
+Middleware checks role permissions on every request.
+
+### Password Hashing
+
+- Bcrypt with 12 rounds
+- Salt automatically generated per password
+- Passwords never stored in plain text
+
+### Data Protection
+
+- All API calls over HTTPS
+- Sensitive data encrypted at rest (Google tokens, passwords)
+- Input validation on all endpoints (Pydantic schemas)
+- SQL injection prevention via parameterized queries
+
+---
+
+## Scalability Considerations
+
+### Async Jobs
+
+- Celery workers can be horizontally scaled
+- Redis broker supports multiple workers
+- Long-running tasks (AI summaries, email batches) don't block API
+
+### Database Indexing
+
+Critical indexes for performance:
+- `appointments (doctor_id, appointment_date, appointment_time)` - Schedule queries
+- `appointments (patient_id, created_at)` - Patient history
+- `notifications (user_id, is_read, created_at)` - Notification list
+- `medication_reminders (reminder_date, is_sent)` - Daily reminder jobs
+
+### Connection Pooling
+
+- SQLAlchemy async engine with pool_size=20
+- Prevents connection exhaustion under load
+
+### Future Scaling
+
+1. **Horizontal Scaling**: Deploy multiple backend instances behind load balancer
+2. **Database Sharding**: Partition by doctor_id or patient_id for large datasets
+3. **Caching Layer**: Redis cache for frequently accessed data (doctor profiles, slots)
+4. **CDN**: Serve static assets (images, CSS, JS) via CDN
+5. **Microservices**: Separate AI, notifications, and calendar into independent services
+6. **Queue Scaling**: Add more Celery workers based on queue depth monitoring
+
+### Monitoring
+
+- Prometheus metrics for API latency, error rates, queue depth
+- Grafana dashboards for real-time visibility
+- Alerts for high error rates, slow queries, queue backlog
+
+---
+
+## Trade-offs
+
+1. **Slot Hold Duration**: 10 minutes balances user experience vs. slot availability
+2. **AI Timeout**: 30 seconds prevents user frustration but may miss complex analyses
+3. **Retry Attempts**: 4 retries balance reliability vs. cost
+4. **Token Expiry**: Refresh tokens expire in 7 days for security vs. convenience
+
+---
+
+## Disaster Recovery
+
+- Database backups daily (point-in-time recovery)
+- Redis persistence enabled
+- Email retry queue survives restarts
+- LLM failures don't block core functionality
