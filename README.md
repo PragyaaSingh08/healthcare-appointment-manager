@@ -2,6 +2,22 @@
 
 A clinic platform with separate patient, doctor, and admin portals: booking with concurrency-safe slot holds, AI pre-/post-visit summaries (Groq), patient-history RAG (ChromaDB), an AI assistant chatbot, email notifications, and Google Calendar sync for both patient and doctor.
 
+# 🌐 Live Deployment
+
+| Service | URL |
+|----------|------|
+| Frontend (Vercel) | https://healthcare-appointment-ma-git-3fcb5f-pragyas1008-1004s-projects.vercel.app |
+| Backend API (Railway) | https://healthcare-appointment-manager-production-831c.up.railway.app |
+| Swagger API Docs | https://healthcare-appointment-manager-production-831c.up.railway.app/docs |
+| ReDoc API Docs | https://healthcare-appointment-manager-production-831c.up.railway.app/redoc |
+
+### Quick Access
+
+- 🚀 Frontend Demo: https://healthcare-appointment-ma-git-3fcb5f-pragyas1008-1004s-projects.vercel.app
+- 🔧 Backend API: https://healthcare-appointment-manager-production-831c.up.railway.app
+- 📚 Swagger Docs: https://healthcare-appointment-manager-production-831c.up.railway.app/docs
+- 📖 ReDoc Docs: https://healthcare-appointment-manager-production-831c.up.railway.app/redoc
+
 See SYSTEM_DESIGN.md for the architecture write-up (double-booking prevention, leave conflicts, notification/calendar failure handling, latency).
 
 Status of this build
