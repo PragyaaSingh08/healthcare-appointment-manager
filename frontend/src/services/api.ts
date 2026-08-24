@@ -9,8 +9,10 @@ import type {
   SlotInterval,
 } from '../types'
 
-const api = axios.create({ baseURL: '/api' })
-
+const api = axios.create({
+  baseURL:
+    'https://healthcare-appointment-manager-production-831c.up.railway.app/api',
+})
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
   if (token) {
