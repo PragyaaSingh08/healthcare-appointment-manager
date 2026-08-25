@@ -29,11 +29,14 @@ def _doctor_to_response(doctor: Doctor) -> DoctorResponse:
 @router.get("", response_model=list[DoctorResponse])
 def list_doctors(
     specialization: str | None = None,
+    is_active: bool | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Doctor).filter(Doctor.is_active.is_(True))
+    query = db.query(Doctor)
+    if is_active is not None:
+        query = query.filter(Doctor.is_active == is_active)
     if specialization:
         query = query.filter(Doctor.specialization.ilike(f"%{specialization}%"))
     doctors = query.offset((page - 1) * page_size).limit(page_size).all()

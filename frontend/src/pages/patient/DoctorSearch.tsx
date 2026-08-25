@@ -14,8 +14,8 @@ export default function DoctorSearch() {
     setLoading(true)
     const timeout = setTimeout(() => {
       doctorsApi
-        .list(specialization || undefined)
-        .then(({ data }) => setDoctors(data))
+        .list(specialization || undefined, true)
+        .then((res) => setDoctors(res.data))
         .finally(() => setLoading(false))
     }, 250) // debounced search
     return () => clearTimeout(timeout)

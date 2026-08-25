@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { authApi, apiErrorMessage } from '../services/api'
+import CalendarConnectButton from '../components/CalendarConnectButton'
 
 const NAV_BY_ROLE: Record<string, { to: string; label: string }[]> = {
   PATIENT: [
@@ -54,6 +55,7 @@ function VerificationBanner() {
 export default function AppLayout() {
   const { user, logout } = useAuth()
   const nav = user ? NAV_BY_ROLE[user.role] ?? [] : []
+  const showCalendarSync = user && (user.role === 'PATIENT' || user.role === 'DOCTOR')
 
   return (
     <div className="min-h-screen flex">
@@ -78,6 +80,11 @@ export default function AppLayout() {
             </NavLink>
           ))}
         </nav>
+        {showCalendarSync && (
+          <div className="px-4 py-3 border-t border-white/10">
+            <CalendarConnectButton compact className="w-full justify-center" />
+          </div>
+        )}
         <div className="px-6 py-4 border-t border-white/10">
           <p className="text-sm text-white/80">{user?.name}</p>
           <p className="text-xs text-white/50 mb-3">{user?.role.toLowerCase()}</p>

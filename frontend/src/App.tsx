@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import { ToastProvider } from './components/Toast'
@@ -8,6 +9,7 @@ import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import VerifyEmail from './pages/VerifyEmail'
+import CalendarCallback from './pages/CalendarCallback'
 import PatientDashboard from './pages/patient/PatientDashboard'
 import DoctorSearch from './pages/patient/DoctorSearch'
 import DoctorProfile from './pages/patient/DoctorProfile'
@@ -20,7 +22,7 @@ import AdminOverview from './pages/admin/AdminOverview'
 import AdminDoctors from './pages/admin/AdminDoctors'
 import type { Role } from './types'
 
-function ProtectedByRole({ allow, children }: { allow: Role[]; children: React.ReactNode }) {
+function ProtectedByRole({ allow, children }: { allow: Role[]; children: ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="p-8 text-ink-400">Loading…</div>
   if (!user) return <Navigate to="/login" replace />
@@ -45,9 +47,7 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/calendar/callback" element={<CalendarCallback />} />
 
         <Route element={<AppLayout />}>
           <Route path="/" element={<RoleHome />} />

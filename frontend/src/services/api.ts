@@ -1,8 +1,10 @@
 import axios from 'axios'
 import type {
   Appointment,
+  CalendarStatus,
   CurrentUser,
   Doctor,
+  DoctorLeave,
   Hold,
   PostVisitSummary,
   PreVisitSummary,
@@ -10,12 +12,12 @@ import type {
 } from '../types'
 
 const api = axios.create({
-  baseURL:
-    'https://healthcare-appointment-manager-production-831c.up.railway.app/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
 })
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
   if (token) {
+    config.headers = config.headers || {}
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
@@ -24,8 +26,12 @@ api.interceptors.request.use((config) => {
 // Centralized error shape unwrapping so components can just read `.message`.
 export function apiErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    const detail = err.response?.data?.error
-    if (detail?.message) return detail.message
+    const data = err.response?.data as { error?: { message?: string }; detail?: string } | undefined
+    if (data?.error?.message) return data.error.message
+    if (typeof data?.detail === 'string') return data.detail
+  }
+  if (err instanceof Error && err.message) {
+    return err.message
   }
   return 'Something went wrong. Please try again.'
 }
@@ -44,11 +50,43 @@ export const authApi = {
 }
 
 export const doctorsApi = {
-  list: (specialization?: string) =>
-    api.get<Doctor[]>('/doctors', { params: specialization ? { specialization } : {} }),
+  list: (specialization?: string, isActive?: boolean) =>
+    api.get<Doctor[]>('/doctors', {
+      params: {
+        ...(specialization ? { specialization } : {}),
+        ...(isActive !== undefined ? { is_active: isActive } : {}),
+      },
+    }),
   get: (id: string) => api.get<Doctor>(`/doctors/${id}`),
+  update: (
+    id: string,
+    payload: {
+      specialization?: string
+      qualification?: string | null
+      experience?: number | null
+      slot_duration?: number
+      is_active?: boolean
+    },
+  ) => api.put<Doctor>(`/doctors/${id}`, payload),
+  deactivate: (id: string) => api.delete(`/doctors/${id}`),
   availability: (id: string, date: string) =>
     api.get<{ date: string; available_slots: SlotInterval[] }>(`/doctors/${id}/availability`, { params: { date } }),
+  getLeaves: (doctorId: string) =>
+    api.get<DoctorLeave[]>(`/doctors/${doctorId}/leave`),
+  addLeave: (doctorId: string, leaveDate: string, reason?: string) =>
+    api.post<{ id: string; leave_date: string; affected_appointments: number }>(`/doctors/${doctorId}/leave`, {
+      leave_date: leaveDate,
+      reason,
+    }),
+  deleteLeave: (doctorId: string, leaveId: string) =>
+    api.delete(`/doctors/${doctorId}/leave/${leaveId}`),
+}
+
+export const calendarApi = {
+  connect: () => api.post<{ auth_url: string }>('/calendar/connect'),
+  callback: (code: string, state: string) =>
+    api.get<{ status: string }>('/calendar/callback', { params: { code, state } }),
+  status: () => api.get<CalendarStatus>('/calendar/status'),
 }
 
 export const slotsApi = {

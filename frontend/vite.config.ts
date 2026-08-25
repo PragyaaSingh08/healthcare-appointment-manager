@@ -7,8 +7,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target:
+          process.env.VITE_PROXY_TARGET ||
+          'https://healthcare-appointment-manager-production-831c.up.railway.app',
         changeOrigin: true,
+        secure: false,
       },
     },
   },

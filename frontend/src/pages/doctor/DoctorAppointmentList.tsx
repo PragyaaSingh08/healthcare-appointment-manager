@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom'
 import { appointmentsApi } from '../../services/api'
 import type { Appointment } from '../../types'
 import { AppointmentStatusBadge } from '../../components/StatusBadge'
+import CalendarConnectButton from '../../components/CalendarConnectButton'
 
 export default function DoctorAppointmentList({ todayOnly = false }: { todayOnly?: boolean }) {
   const [appointments, setAppointments] = useState<Appointment[] | null>(null)
 
   useEffect(() => {
-    appointmentsApi.list().then(({ data }) => setAppointments(data))
+    appointmentsApi.list().then((res) => setAppointments(res.data))
   }, [])
 
   const filtered = todayOnly
@@ -16,9 +17,13 @@ export default function DoctorAppointmentList({ todayOnly = false }: { todayOnly
     : appointments
 
   return (
-    <div className="p-8 max-w-3xl">
-      <h1 className="font-display text-3xl text-forest-900 mb-1">{todayOnly ? "Today's appointments" : 'All appointments'}</h1>
-      <p className="text-ink-400 mb-6">Review symptoms and AI summaries before each visit.</p>
+    <div className="p-8 max-w-3xl space-y-6">
+      <div>
+        <h1 className="font-display text-3xl text-forest-900 mb-1">{todayOnly ? "Today's appointments" : 'All appointments'}</h1>
+        <p className="text-ink-400">Review symptoms and AI summaries before each visit.</p>
+      </div>
+
+      <CalendarConnectButton />
 
       {filtered === undefined || filtered === null ? (
         <p className="text-ink-400 text-sm">Loading…</p>

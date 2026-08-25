@@ -62,6 +62,36 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 app.include_router(api_router)
 
 
+@app.on_event("startup")
+def bootstrap_default_admin():
+    """Ensures at least one default Admin account exists on application start."""
+    from app.core.db import SessionLocal
+    from app.core.security import hash_password
+    from app.models.base import UserRole
+    from app.models.identity import User
+
+    db = SessionLocal()
+    try:
+        admin_exists = db.query(User).filter(User.role == UserRole.ADMIN).first()
+        if not admin_exists:
+            admin_user = User(
+                name="Clinic Admin",
+                email="admin@example.com",
+                password_hash=hash_password("AdminPass123!"),
+                role=UserRole.ADMIN,
+                is_active=True,
+                is_email_verified=True,
+            )
+            db.add(admin_user)
+            db.commit()
+            logging.getLogger("startup").info("Default admin account created")
+    except Exception as e:
+        db.rollback()
+        logging.getLogger("startup").error("Error checking or creating default admin: %s", e)
+    finally:
+        db.close()
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "app": settings.APP_NAME}

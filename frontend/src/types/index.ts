@@ -66,3 +66,13 @@ export interface PostVisitSummary {
 export interface ApiError {
   error: { code: string; message: string }
 }
+
+export interface DoctorLeave {
+  id: string
+  leave_date: string
+  reason: string | null
+}
+
+export interface CalendarStatus {
+  connected: boolean
+}

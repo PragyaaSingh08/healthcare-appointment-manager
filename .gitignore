@@ -17,6 +17,7 @@ node_modules/
 dist/
 build/
 frontend/dist/
+*.tsbuildinfo
 
 # ChromaDB
 backend/chroma_data/
@@ -31,3 +32,13 @@ backend/celerybeat-schedule
 # OS
 .DS_Store
 Thumbs.db
+
+
+# Node
+node_modules/
+dist/
+build/
+frontend/dist/
+
+# TypeScript
+*.tsbuildinfo
