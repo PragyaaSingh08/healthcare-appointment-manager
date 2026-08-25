@@ -100,7 +100,18 @@ def _tool_search_doctors(db: Session, args: dict) -> dict:
     if args.get("specialization"):
         query = query.filter(Doctor.specialization.ilike(f"%{args['specialization']}%"))
     doctors = query.limit(10).all()
-    return {"doctors": [{"id": d.id, "specialization": d.specialization, "qualification": d.qualification} for d in doctors]}
+    return {
+        "doctors": [
+            {
+                "id": d.id,
+                "name": d.user.name if d.user else "Doctor",
+                "specialization": d.specialization,
+                "qualification": d.qualification,
+                "experience": d.experience,
+            }
+            for d in doctors
+        ]
+    }
 
 
 def _tool_get_availability(db: Session, args: dict) -> dict:
@@ -114,7 +125,19 @@ def _tool_get_availability(db: Session, args: dict) -> dict:
 
 def _tool_get_appointments(db: Session, patient_id: str) -> dict:
     appts = db.query(Appointment).filter(Appointment.patient_id == patient_id).order_by(Appointment.start_time.desc()).limit(20).all()
-    return {"appointments": [{"id": a.id, "doctor_id": a.doctor_id, "start_time": a.start_time.isoformat(), "status": a.status.value} for a in appts]}
+    return {
+        "appointments": [
+            {
+                "id": a.id,
+                "doctor_id": a.doctor_id,
+                "doctor_name": a.doctor.user.name if a.doctor and a.doctor.user else "Doctor",
+                "start_time": a.start_time.isoformat(),
+                "status": a.status.value,
+                "booking_reference": a.booking_reference,
+            }
+            for a in appts
+        ]
+    }
 
 
 def _tool_get_history(db: Session, patient_id: str, args: dict) -> dict:
