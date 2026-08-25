@@ -19,6 +19,20 @@ A comprehensive clinic platform with dedicated portals for patients, doctors, an
 - **Interactive API Docs (Swagger UI)**: [https://healthcare-appointment-manager-production-831c.up.railway.app/docs](https://healthcare-appointment-manager-production-831c.up.railway.app/docs)
 - **ReDoc Specification**: [https://healthcare-appointment-manager-production-831c.up.railway.app/redoc](https://healthcare-appointment-manager-production-831c.up.railway.app/redoc)
 
+---
+## Evaluator Testing Guide         
+
+### 1. Administrator Access
+
+For evaluation/demo purposes, a default Administrator account is created automatically when no Administrator exists in the database.
+
+**Admin Login**
+```text
+Email: admin@example.com
+Password: AdminPass123!
+```
+
+--- 
 
 ## Status of this Build
 
